@@ -1,0 +1,70 @@
+name: 'Build'
+on:
+  - 'push'
+  - 'pull_request'
+jobs:
+  linux:
+    name: "Linux"
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type:
+          - 'Release'
+          - 'Debug'
+        image:
+          - 'clang-17'
+          - 'clang-18'
+          - 'gcc-14'
+          - 'gcc-15'
+    runs-on: 'ubuntu-latest'
+    container:
+      image: 'ghcr.io/lmichaelis/images:${{matrix.image}}'
+    steps:
+      - uses: 'actions/checkout@v3'
+      - name: 'Configure'
+        run: 'cmake -B build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DZK_BUILD_EXAMPLES=ON -DZK_BUILD_TESTS=ON'
+      - name: 'Build'
+        run: 'cmake --build build'
+      - name: 'Test'
+        working-directory: 'build/'
+        run: 'ctest --output-on-failure'
+
+  macos:
+    name: "MacOS"
+    strategy:
+      fail-fast: false
+      matrix:
+        xcode:
+          - 'latest-stable'
+        build_type: [ 'Debug', 'Release' ]
+    env:
+      ASAN_OPTIONS: 'detect_container_overflow=0'
+    runs-on: 'macos-latest'
+    steps:
+      - uses: 'actions/checkout@v3'
+      - uses: 'maxim-lobanov/setup-xcode@v1'
+        with:
+          xcode-version: '${{matrix.xcode}}'
+      - name: 'Configure'
+        run: 'cmake -B build -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DZK_BUILD_EXAMPLES=ON -DZK_BUILD_TESTS=ON -DBUILD_SQUISH_WITH_SSE2=OFF'
+      - name: 'Build'
+        run: 'cmake --build build'
+      - name: 'Test'
+        working-directory: 'build/'
+        run: ctest --output-on-failure -E 'ModelAnimation.load'
+
+  windows:
+    name: "Windows"
+    runs-on: 'windows-latest'
+    steps:
+      - uses: 'actions/checkout@v3'
+        with:
+          submodules: 'recursive'
+      - name: 'Configure'
+        shell: 'bash'
+        run: 'cmake -B build -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release -DZK_BUILD_EXAMPLES=ON -DZK_BUILD_TESTS=ON'
+      - name: 'Build'
+        run: 'cmake --build build --config Release -j 2'
+      - name: 'Test'
+        working-directory: 'build/'
+        run: ctest -C Release --output-on-failure -E 'Material.dump'
